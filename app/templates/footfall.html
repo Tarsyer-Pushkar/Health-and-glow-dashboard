@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% block title %}Footfall{% endblock %}
+{% block page_title %}<i class="fa-solid fa-users" style="color:var(--primary);margin-right:8px"></i>Footfall — Health &amp; Glow Dashboard{% endblock %}
+
+{% block content %}
+<!-- Filter Bar -->
+<div class="filter-bar">
+  <label>From</label>
+  <input type="date" id="dateFrom" />
+  <label>To</label>
+  <input type="date" id="dateTo" />
+  <button class="btn btn-primary" onclick="loadAll()"><i class="fa-solid fa-magnifying-glass"></i> Apply</button>
+  <button class="quick-btn" onclick="setRange(0)">Today</button>
+  <button class="quick-btn" onclick="setYesterday()">Yesterday</button>
+  <button class="quick-btn active" onclick="setRange(6)">7 Days</button>
+  <button class="quick-btn" id="btn30" onclick="setRange(29)">30 Days</button>
+  <button class="quick-btn" onclick="setRange(89)">90 Days</button>
+</div>
+
+<div class="content" style="display:flex;flex-direction:column;">
+
+  <!-- Period Comparison Chips -->
+  <div style="margin-bottom:10px;flex-shrink:0;">
+    <div style="font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">
+      <i class="fa-solid fa-users" style="font-size:10px;"></i> Footfall — Period Comparison
+    </div>
+    <div class="chip-row" id="periodChips">
+      <div class="spinner" style="width:18px;height:18px;border-width:2px;margin:0;"></div>
+    </div>
+  </div>
+
+  <!-- KPI Chips -->
+  <div style="margin-bottom:8px;flex-shrink:0;">
+    <div style="font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">
+      <i class="fa-solid fa-chart-pie" style="font-size:10px;"></i> Visitor Breakdown — Selected Period
+    </div>
+    <div class="chip-row" id="kpiChips">
+      <div class="spinner" style="width:18px;height:18px;border-width:2px;margin:0;"></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div style="flex:1;min-height:400px;display:flex;flex-direction:column;gap:12px;">
+
+    <!-- Row A: Daily Trend + Visitor Breakdown -->
+    <div style="display:grid;grid-template-columns:1.8fr 1fr;gap:12px;flex:1;min-height:0;">
+
+      <div class="card" style="display:flex;flex-direction:column;min-height:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div class="card-title" style="margin:0;">
+            <i class="fa-solid fa-chart-line" style="color:var(--primary);margin-right:6px;font-size:11px;"></i>
+            Daily Visitor Trend
+          </div>
+          <div style="display:flex;gap:4px;">
+            <a id="btnDownloadCsv" href="#" class="btn btn-primary" style="padding:3px 10px;font-size:10.5px;text-decoration:none;">
+              <i class="fa-solid fa-download" style="margin-right:4px;"></i>Download CSV
+            </a>
+          </div>
+        </div>
+        <div style="flex:1;position:relative;min-height:0;">
+          <canvas id="trendChart" style="position:absolute;inset:0;width:100%!important;height:100%!important;"></canvas>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;min-height:0;">
+        <div class="card-title">
+          <i class="fa-solid fa-chart-pie" style="color:var(--primary);margin-right:6px;font-size:11px;"></i>
+          Visitor Breakdown
+        </div>
+        <div style="flex:1;position:relative;min-height:0;">
+          <canvas id="breakdownChart" style="position:absolute;inset:0;width:100%!important;height:100%!important;"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Row B: Hourly Bar + Summary Cards -->
+    <div style="display:grid;grid-template-columns:1.8fr 1fr;gap:12px;flex:1;min-height:0;">
+
+      <div class="card" style="display:flex;flex-direction:column;min-height:0;">
+        <div class="card-title">
+          <i class="fa-solid fa-clock" style="color:var(--primary);margin-right:6px;font-size:11px;"></i>
+          Avg Hourly Footfall
+        </div>
+        <div style="flex:1;position:relative;min-height:0;">
+          <canvas id="hourlyChart" style="position:absolute;inset:0;width:100%!important;height:100%!important;"></canvas>
+        </div>
+      </div>
+
+      <!-- Summary stat cards -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div class="card" style="flex:1;">
+          <div class="stat-label">Peak Hour</div>
+          <div class="stat-value" id="peakHour">—</div>
+          <div class="stat-sub">Highest footfall hour</div>
+        </div>
+        <div class="card" style="flex:1;">
+          <div class="stat-label">Avg Daily Visitors</div>
+          <div class="stat-value" id="avgDaily">—</div>
+          <div class="stat-sub">Over selected period</div>
+        </div>
+        <div class="card" style="flex:1;">
+          <div class="stat-label">Male / Female Split</div>
+          <div class="stat-value" id="genderSplit">—</div>
+          <div class="stat-sub">Of total visitors</div>
+        </div>
+        <div class="card" style="flex:1;">
+          <div class="stat-label">Group Count</div>
+          <div class="stat-value" id="groupCountStat">—</div>
+          <div class="stat-sub">Groups detected</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function todayStr() { return new Date().toISOString().slice(0,10); }
+  function offsetDate(days) {
+    const d = new Date(); d.setDate(d.getDate() - days);
+    return d.toISOString().slice(0,10);
+  }
+  function setRange(days) {
+    document.getElementById('dateFrom').value = offsetDate(days);
+    document.getElementById('dateTo').value   = todayStr();
+    document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    loadAll();
+  }
+  function setYesterday() {
+    const y = offsetDate(1);
+    document.getElementById('dateFrom').value = y;
+    document.getElementById('dateTo').value   = y;
+    document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    loadAll();
+  }
+
+  function getParams() {
+    return `from=${document.getElementById('dateFrom').value}&to=${document.getElementById('dateTo').value}`;
+  }
+
+  function lineGradient(ctx, color, height) {
+    const g = ctx.createLinearGradient(0, 0, 0, height);
+    g.addColorStop(0,   color + '55');
+    g.addColorStop(0.6, color + '18');
+    g.addColorStop(1,   color + '00');
+    return g;
+  }
+
+  let trendChart, breakdownChart, hourlyChart;
+  let trendData = { labels:[], visitors:[] };
+
+  // ── Period chips ─────────────────────────────────────────────────────────
+  async function loadOverview() {
+    const res = await fetch(`/api/footfall/overview?${getParams()}`);
+    const d   = await res.json();
+    const p   = d.periods;
+    const defs = [
+      {key:'today',      label:'Today',       icon:'fa-sun',            cls:'chip-green'},
+      {key:'yesterday',  label:'Yesterday',   icon:'fa-clock-rotate-left', cls:'chip-green'},
+      {key:'this_week',  label:'This Week',   icon:'fa-calendar-week',  cls:'chip-teal'},
+      {key:'last_week',  label:'Last Week',   icon:'fa-calendar-minus', cls:'chip-teal'},
+      {key:'this_month', label:'This Month',  icon:'fa-calendar',       cls:'chip-blue'},
+      {key:'last_month', label:'Last Month',  icon:'fa-calendar-xmark', cls:'chip-blue'},
+    ];
+    document.getElementById('periodChips').innerHTML = defs.map(({key,label,icon,cls}) =>
+      `<span class="chip ${cls}"><i class="fa-solid ${icon}" style="font-size:10px;"></i> ${label}: <strong>${(p[key]||0).toLocaleString()}</strong></span>`
+    ).join('');
+
+    const b = d.breakdown;
+    const total = d.total_visitors;
+    const groupCount = b.group_count || 0;
+
+    document.getElementById('kpiChips').innerHTML = `
+      <span class="chip chip-green"><i class="fa-solid fa-users" style="font-size:10px;"></i> Visitors: <strong>${total.toLocaleString()}</strong></span>
+      <span class="chip chip-teal"><i class="fa-solid fa-mars" style="font-size:10px;"></i> Male: <strong>${(b.male||0).toLocaleString()}</strong></span>
+      <span class="chip chip-purple"><i class="fa-solid fa-venus" style="font-size:10px;"></i> Female: <strong>${(b.female||0).toLocaleString()}</strong></span>
+      <span class="chip chip-orange"><i class="fa-solid fa-people-group" style="font-size:10px;"></i> Group Count: <strong>${groupCount.toLocaleString()}</strong></span>
+    `;
+
+    const mPct = total ? Math.round(b.male/total*100) : 0;
+    const fPct = total ? Math.round(b.female/total*100) : 0;
+    document.getElementById('genderSplit').textContent = `${mPct}% / ${fPct}%`;
+    document.getElementById('groupCountStat').textContent = groupCount.toLocaleString();
+
+    renderBreakdownChart(b);
+  }
+
+  // ── Trend ─────────────────────────────────────────────────────────────────
+  async function loadTrend() {
+    const res  = await fetch(`/api/footfall/trend?${getParams()}`);
+    trendData  = await res.json();
+    const days = trendData.visitors.length;
+    const avg  = days ? Math.round(trendData.visitors.reduce((a,b)=>a+b,0)/days) : 0;
+    document.getElementById('avgDaily').textContent = avg.toLocaleString();
+    renderTrendChart();
+  }
+
+  function renderTrendChart() {
+    const canvas = document.getElementById('trendChart');
+    const ctx = canvas.getContext('2d');
+    if (trendChart) trendChart.destroy();
+    const color = '#c8102e';
+    const labels = trendData.labels.map(l => l.slice(5));
+    const grad   = lineGradient(ctx, color, canvas.offsetHeight || 220);
+    trendChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Visitors',
+          data: trendData.visitors,
+          borderColor: color, backgroundColor: grad,
+          fill: true, tension: 0.42,
+          pointRadius: trendData.visitors.length > 20 ? 2 : 4,
+          pointBackgroundColor: color, pointBorderColor: '#fff',
+          pointBorderWidth: 1.5, pointHitRadius: 14, pointHoverRadius: 7,
+          borderWidth: 2.5,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 600, easing: 'easeOutQuart' },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 10, color: '#8492a6' } },
+          y: { min: 0, grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 }, color: '#8492a6' } }
+        }
+      }
+    });
+  }
+
+  // ── Breakdown Donut ───────────────────────────────────────────────────────
+  function renderBreakdownChart(b) {
+    const ctx = document.getElementById('breakdownChart').getContext('2d');
+    if (breakdownChart) breakdownChart.destroy();
+    breakdownChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Male', 'Female'],
+        datasets: [{ data:[b.male||0, b.female||0], backgroundColor:['#c8102e','#7c3aed'], borderWidth:2.5, borderColor:'#fff', hoverOffset:6 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 600 },
+        plugins: {
+          legend: { position:'bottom', labels:{ font:{size:11}, padding:10, boxWidth:10, usePointStyle:true } },
+          tooltip: { callbacks: { label: ctx => { const tot=ctx.dataset.data.reduce((a,b)=>a+b,0); const pct=tot?Math.round(ctx.raw/tot*100):0; return ` ${ctx.label}: ${pct}%`; } } }
+        },
+        cutout: '68%',
+      }
+    });
+  }
+
+  // ── Hourly Bar ────────────────────────────────────────────────────────────
+  async function loadHourly() {
+    const res = await fetch(`/api/footfall/hourly?${getParams()}`);
+    const d   = await res.json();
+
+    // Filter to 10:00 – 22:00
+    const f = d.labels.reduce((acc, lbl, i) => {
+      const hour = parseInt(lbl.split(':')[0]);
+      if (hour >= 10 && hour <= 22) {
+        acc.labels.push(lbl);
+        acc.values.push(d.values[i]);
+        acc.male.push(d.male[i]);
+        acc.female.push(d.female[i]);
+        acc.group_count.push(d.group_count[i]);
+      }
+      return acc;
+    }, { labels: [], values: [], male: [], female: [], group_count: [] });
+
+    const peak = f.values.indexOf(Math.max(...f.values));
+    document.getElementById('peakHour').textContent = f.labels[peak] || '—';
+
+    const ctx = document.getElementById('hourlyChart').getContext('2d');
+    if (hourlyChart) hourlyChart.destroy();
+    hourlyChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: f.labels,
+        datasets: [
+          {
+            label: 'Male',
+            data: f.male,
+            backgroundColor: '#c8102eCC',
+            borderRadius: { topLeft: 3, topRight: 0, bottomLeft: 3, bottomRight: 0 },
+            borderSkipped: false,
+            stack: 'visitors',
+          },
+          {
+            label: 'Female',
+            data: f.female,
+            backgroundColor: '#7c3aedCC',
+            borderRadius: { topLeft: 0, topRight: 3, bottomLeft: 0, bottomRight: 3 },
+            borderSkipped: false,
+            stack: 'visitors',
+          },
+          {
+            type: 'line',
+            label: 'Group Count',
+            data: f.group_count,
+            borderColor: '#0d9488',
+            backgroundColor: '#0d948822',
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: '#0d9488',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 1.5,
+            tension: 0.4,
+            fill: false,
+            yAxisID: 'yGroup',
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 600 },
+        plugins: {
+          legend: { display: true, position: 'top', labels: { font: { size: 11 }, padding: 12, boxWidth: 10, usePointStyle: true } },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 }, color: '#8492a6' } },
+          y: { stacked: true, min: 0, grid: { color: '#f0f0f0' }, ticks: { font: { size: 10 }, color: '#8492a6' }, title: { display: true, text: 'Visitors', font: { size: 10 }, color: '#8492a6' } },
+          yGroup: { position: 'right', min: 0, grid: { display: false }, ticks: { font: { size: 10 }, color: '#0d9488' }, title: { display: true, text: 'Group Count', font: { size: 10 }, color: '#0d9488' } }
+        }
+      }
+    });
+  }
+
+  function updateCsvLink() {
+    const btn = document.getElementById('btnDownloadCsv');
+    if (btn) btn.href = `/api/footfall/hourly_csv?${getParams()}`;
+  }
+
+  function loadAll() {
+    updateCsvLink();
+    loadOverview();
+    loadTrend();
+    loadHourly();
+  }
+
+  // Init
+  document.getElementById('dateFrom').value = offsetDate(6);
+  document.getElementById('dateTo').value   = todayStr();
+  loadAll();
+</script>
+{% endblock %}
