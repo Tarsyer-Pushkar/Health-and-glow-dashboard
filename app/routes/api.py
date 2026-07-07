@@ -132,7 +132,18 @@ def footfall_trend():
         total, _, _, _ = _sum_footfall(col, s, e)
         visitors.append(total)
 
-    return jsonify({"labels": labels, "visitors": visitors})
+    s = f"{days[0]} 00:00:00" if days else ""
+    e = f"{days[-1]} 23:59:59" if days else ""
+    hours_pipeline = [
+        {"$match": {"date_time": {"$gte": s, "$lte": e}}},
+        {"$addFields": {"hour_bucket": {"$substr": ["$date_time", 0, 13]}}},
+        {"$group": {"_id": "$hour_bucket"}},
+        {"$count": "hours"},
+    ]
+    hours_res = list(col.aggregate(hours_pipeline)) if days else []
+    hours_with_data = hours_res[0]["hours"] if hours_res else 0
+
+    return jsonify({"labels": labels, "visitors": visitors, "hours_with_data": hours_with_data})
 
 
 @api_bp.route("/footfall/hourly")

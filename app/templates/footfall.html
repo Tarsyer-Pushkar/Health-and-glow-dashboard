@@ -195,8 +195,10 @@
   async function loadTrend() {
     const res  = await fetch(`/api/footfall/trend?${getParams()}`);
     trendData  = await res.json();
-    const days = trendData.visitors.length;
-    const avg  = days ? Math.round(trendData.visitors.reduce((a,b)=>a+b,0)/days) : 0;
+    const total = trendData.visitors.reduce((a,b)=>a+b,0);
+    const hours = trendData.hours_with_data || 0;
+    const avgPerHour = hours ? total / hours : 0;
+    const avg = Math.round(avgPerHour * 24);
     document.getElementById('avgDaily').textContent = avg.toLocaleString();
     renderTrendChart();
   }
