@@ -95,9 +95,9 @@
           <div class="stat-sub">Highest footfall hour</div>
         </div>
         <div class="card" style="flex:1;">
-          <div class="stat-label">Avg Daily Visitors</div>
+          <div class="stat-label">Avg Visitors</div>
           <div class="stat-value" id="avgDaily">—</div>
-          <div class="stat-sub">Over selected period</div>
+          <div class="stat-sub" id="avgDailySub">Over selected period</div>
         </div>
         <div class="card" style="flex:1;">
           <div class="stat-label">Male / Female Split</div>
@@ -195,11 +195,21 @@
   async function loadTrend() {
     const res  = await fetch(`/api/footfall/trend?${getParams()}`);
     trendData  = await res.json();
-    const total = trendData.visitors.reduce((a,b)=>a+b,0);
-    const hours = trendData.hours_with_data || 0;
-    const avgPerHour = hours ? total / hours : 0;
-    const avg = Math.round(avgPerHour * 24);
+    const total   = trendData.visitors.reduce((a,b)=>a+b,0);
+    const numDays = trendData.visitors.length;
+    const isSingleDay = numDays <= 1;
+
+    let avg, subLabel;
+    if (isSingleDay) {
+      const hours = trendData.hours_with_data || 0;
+      avg = hours ? Math.round(total / hours) : 0;
+      subLabel = 'Average per hour';
+    } else {
+      avg = numDays ? Math.round(total / numDays) : 0;
+      subLabel = 'Average per day';
+    }
     document.getElementById('avgDaily').textContent = avg.toLocaleString();
+    document.getElementById('avgDailySub').textContent = subLabel;
     renderTrendChart();
   }
 
