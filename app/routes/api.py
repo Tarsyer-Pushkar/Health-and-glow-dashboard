@@ -84,8 +84,12 @@ def footfall_overview():
     s = f"{from_str} 00:00:00"
     e = f"{to_str} 23:59:59"
 
+    # Restrict to the same 10:00-22:00 business-hours window shown in the hourly bar chart,
+    # so the breakdown totals match what the bar chart displays.
     pipeline = [
         {"$match": {"date_time": {"$gte": s, "$lte": e}}},
+        {"$addFields": {"hour": {"$substr": ["$date_time", 11, 2]}}},
+        {"$match": {"hour": {"$gte": "10", "$lte": "22"}}},
         {"$group": {
             "_id": None,
             "male":        {"$sum": "$count_male"},
